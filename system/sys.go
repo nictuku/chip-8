@@ -58,16 +58,13 @@ func (s *Sys) LoadGame(rom []byte) {
 	if len(rom) == 0 {
 		log.Fatal("Tried to load zero-length ROM.")
 	}
-	for i := 0; i < len(rom); i += 2 {
-		s.mem[0x200+i] = rom[i]
-		s.mem[0x200+i+1] = rom[i+1]
-
-	}
+	romArea := s.mem[0x200:]
+	copy(romArea, rom)
 	log.Printf("rom loaded %04x", s.mem[0x202])
 }
 
 func (s *Sys) Run() error {
-	for _ = range [100]bool{} {
+	for _ = range [1024]bool{} {
 		s.stepCycle()
 	}
 	log.Println("run done")
@@ -104,8 +101,17 @@ func (s *Sys) stepCycle() {
 		//		s.pc = opcode
 
 	// 1NNN	Jumps to address NNN.
+	case 0x1000:
+		s.pc = opcode & 0x0FFF
 	// 2NNN	Calls subroutine at NNN.
 	// 3XNN	Skips the next instruction if VX equals NN.
+	case 0x4000:
+		if s.v[(opcode&0x0F00)>>8] != byte(opcode&0x00FF) {
+			s.pc += 4
+		} else {
+			s.pc += 2
+		}
+
 	// 4XNN	Skips the next instruction if VX doesn't equal NN.
 	// 5XY0	Skips the next instruction if VX equals VY.
 	case 0x6000:
@@ -134,14 +140,17 @@ func (s *Sys) stepCycle() {
 	case 0xA000: // ANNN	Sets I to the address NNN.
 		s.i = opcode & 0x0FFF
 		s.pc += 2 // BNNN	Jumps to the address NNN plus V0.
-		// CXNN	Sets VX to a random number and NN.
 		log.Println("ANNN")
+	// CXNN	Sets VX to a random number and NN.
 	case 0xD000:
 		// DXYN	Draws a sprite at coordinate (VX, VY) that has a width of 8
 		// pixels and a height of N pixels. Each row of 8 pixels is read as
 		// bit-coded (with the most significant bit of each byte displayed on
 		// the left) starting from memory location I; I value doesn't change
 		// after the execution of this instruction.
+
+		// Based on the implementation from:
+		// http://www.multigesture.net
 		var pixel byte
 		x := uint16(s.v[(opcode&0x0F00)>>8])
 		y := uint16(s.v[(opcode&0x00F0)>>4])
@@ -173,6 +182,15 @@ func (s *Sys) stepCycle() {
 		// EXA1	Skips the next instruction if the key stored in VX isn't pressed.
 		// FX07	Sets VX to the value of the delay timer.
 		// FX0A	A key press is awaited, and then stored in VX.
+	case 0xF000:
+		switch opcode & 0x00FF {
+		case 0x0015:
+			s.delayTimer = byte(opcode & 0x00FF)
+			s.pc += 2
+		default:
+			log.Printf("opcode not implemented: %x", opcode)
+			return
+		}
 		// FX15	Sets the delay timer to VX.
 		// FX18	Sets the sound timer to VX.
 		// FX1E	Adds VX to I.[3]
@@ -215,6 +233,6 @@ func (s *Sys) stepCycle() {
 
 	}
 
-	time.Sleep(time.Second / 5) // 60hz.
-	// time.Sleep(time.Second / cpuFrequency) // 60hz.
+	// time.Sleep(time.Second / 5) // 60hz.
+	time.Sleep(time.Second / cpuFrequency) // 60hz.
 }
