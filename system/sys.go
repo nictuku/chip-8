@@ -9,6 +9,7 @@
 package system
 
 import (
+	"fmt"
 	"log"
 	"time"
 )
@@ -20,10 +21,10 @@ func New() *Sys {
 	copy(mem, fontset)
 
 	return &Sys{
-		v:     make([]byte, numRegisters),
-		pc:    programAreaStart,
-		i:     programAreaStart,
-		sp:    0,
+		V:     make([]byte, numRegisters),
+		PC:    programAreaStart,
+		I:     programAreaStart,
+		SP:    0,
 		mem:   mem,
 		gfx:   make([]byte, screenWidth*screenHeight),
 		video: new(video),
@@ -31,15 +32,25 @@ func New() *Sys {
 }
 
 type Sys struct {
-	v          []byte
-	pc         uint16
-	sp         byte
+	// Exported fields will appear in the tracer.
+	V          []byte `V`
+	PC         uint16 `PC`
+	SP         byte   `SP`
 	mem        []byte
-	i          uint16
-	gfx        []byte
-	delayTimer byte
-	soundTimer byte
-	video      *video
+	I          uint16 `I`
+	DelayTimer byte   `delayTimer`
+	SoundTimer byte   `soundTimer`
+
+	// The screen buffer. I could use the SDL pixels
+	// directly, but the additional
+	// code complexity isn't worth for saving 64*32 bytes.
+	gfx []byte
+
+	video *video
+}
+
+func (s *Sys) String() string {
+	return CpuTracer(s)
 }
 
 func (s *Sys) Init() error {
@@ -68,9 +79,8 @@ func (s *Sys) stepCycle() {
 
 	draw := false
 	// pc points to next opcode.
+	opcode := uint16(s.mem[s.PC])<<8 | uint16(s.mem[s.PC+1])
 	log.Printf("opcode 0x%04x", opcode)
-	// TODO(nictuku): Implement a proper tracer. Make it generic.
-	log.Printf("pc 0x%04x", s.pc)
 
 	masked := opcode & 0xF000
 	switch masked {
@@ -83,7 +93,7 @@ func (s *Sys) stepCycle() {
 			// 00E0	Clears the screen.
 			s.gfx = make([]byte, screenWidth*screenHeight)
 			draw = true
-			s.pc += 2
+			s.PC += 2
 		default:
 			// 00EE	Returns from a subroutine.
 			log.Printf("opcode not implemented: %x", opcode)
@@ -92,16 +102,16 @@ func (s *Sys) stepCycle() {
 
 	case 0x1000:
 		// 1NNN	Jumps to address NNN.
-		s.pc = opcode & 0x0FFF
+		s.PC = opcode & 0x0FFF
 
 	// 2NNN	Calls subroutine at NNN.
 	// 3XNN	Skips the next instruction if VX equals NN.
 
 	case 0x4000:
-		if s.v[(opcode&0x0F00)>>8] != byte(opcode&0x00FF) {
-			s.pc += 4
+		if s.V[(opcode&0x0F00)>>8] != byte(opcode&0x00FF) {
+			s.PC += 4
 		} else {
-			s.pc += 2
+			s.PC += 2
 		}
 
 	// 4XNN	Skips the next instruction if VX doesn't equal NN.
@@ -110,13 +120,13 @@ func (s *Sys) stepCycle() {
 	case 0x6000:
 		// 6XNN	Sets VX to NN.
 		vx := (opcode & 0x0F00) >> 8
-		s.v[vx] = byte(opcode & 0x00FF)
-		s.pc += 2
+		s.V[vx] = byte(opcode & 0x00FF)
+		s.PC += 2
 	case 0x7000:
 		// 7XNN	Adds NN to VX.
 		vx := (opcode & 0x0F00) >> 8
-		s.v[vx] += byte(opcode & 0x00FF)
-		s.pc += 2
+		s.V[vx] += byte(opcode & 0x00FF)
+		s.PC += 2
 
 	// 8XY0	Sets VX to the value of VY.
 	// 8XY1	Sets VX to VX or VY.
@@ -132,8 +142,8 @@ func (s *Sys) stepCycle() {
 	case 0xA000:
 		// ANNN	Sets I to the address NNN.
 		log.Println("ANNN")
-		s.i = opcode & 0x0FFF
-		s.pc += 2
+		s.I = opcode & 0x0FFF
+		s.PC += 2
 
 	// BNNN	Jumps to the address NNN plus V0.
 	// CXNN	Sets VX to a random number and NN.
@@ -148,14 +158,14 @@ func (s *Sys) stepCycle() {
 		// Based on the implementation from:
 		// http://www.multigesture.net
 		var pixel byte
-		x := uint16(s.v[(opcode&0x0F00)>>8])
-		y := uint16(s.v[(opcode&0x00F0)>>4])
+		x := uint16(s.V[(opcode&0x0F00)>>8])
+		y := uint16(s.V[(opcode&0x00F0)>>4])
 		height := uint16(opcode & 0xF)
-		s.v[0xF] = 0
+		s.V[0xF] = 0
 		log.Println("height", height)
 
 		for yline := uint16(0); yline < height; yline++ {
-			pixel = s.mem[s.i+yline]
+			pixel = s.mem[s.I+yline]
 			log.Printf("pixel: %x", pixel)
 			for xline := uint16(0); xline < 8; xline++ {
 				if (pixel & (0x80 >> xline)) != 0 {
@@ -164,7 +174,7 @@ func (s *Sys) stepCycle() {
 						// VF is set to 1 if any screen pixels are flipped from
 						// set to unset when the sprite is drawn, and to 0 if
 						// that doesn't happen.
-						s.v[0xF] = 1
+						s.V[0xF] = 1
 					}
 					s.gfx[offset] ^= 1
 					log.Printf("setting something in offset %x", offset)
@@ -172,7 +182,7 @@ func (s *Sys) stepCycle() {
 			}
 		}
 		draw = true
-		s.pc += 2
+		s.PC += 2
 
 		// EX9E Skips the next instruction if the key stored in VX is pressed.
 		// EXA1	Skips the next instruction if the key stored in VX isn't pressed.
@@ -182,8 +192,8 @@ func (s *Sys) stepCycle() {
 		switch opcode & 0x00FF {
 		case 0x0015:
 			// FX15	Sets the delay timer to VX.
-			s.delayTimer = byte(opcode & 0x00FF)
-			s.pc += 2
+			s.DelayTimer = byte(opcode & 0x00FF)
+			s.PC += 2
 		default:
 			log.Printf("opcode not implemented: %x", opcode)
 			return
@@ -200,17 +210,19 @@ func (s *Sys) stepCycle() {
 		log.Printf("opcode not implemented: %x", opcode)
 		return
 	}
-	if s.delayTimer > 0 {
-		s.delayTimer -= 1
+	if s.DelayTimer > 0 {
+		s.DelayTimer -= 1
 	}
-	if s.soundTimer > 0 {
-		if s.soundTimer == 1 {
+	if s.SoundTimer > 0 {
+		if s.SoundTimer == 1 {
 			log.Println("BEEP!")
 		}
-		s.soundTimer -= 1
+		s.SoundTimer -= 1
 	}
 
 	if draw {
 		s.video.draw(s.gfx)
 	}
+	// TODO(nictuku): Show CPU tracer on video.
+	fmt.Println(s.String())
 }
