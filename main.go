@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"io/ioutil"
 	"log"
 
@@ -8,14 +9,18 @@ import (
 )
 
 func main() {
+	flag.Parse()
+	romPath := flag.Arg(0)
+	if romPath == "" {
+		log.Fatal("Missing ROM filename argument.")
+	}
+	rom, err := ioutil.ReadFile(romPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	sys := system.New()
 	if err := sys.Init(); err != nil {
-		log.Println(err)
-		return
-	}
-	// Loadgame before.
-	rom, err := ioutil.ReadFile("ibm.ch8")
-	if err != nil {
 		log.Println(err)
 		return
 	}
