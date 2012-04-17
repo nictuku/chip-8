@@ -57,6 +57,10 @@ func (s *Sys) Init() error {
 	return s.video.init()
 }
 
+func (s *Sys) Quit() {
+	s.video.quit()
+}
+
 func (s *Sys) LoadGame(rom []byte) {
 	if len(rom) == 0 {
 		log.Fatal("Tried to load zero-length ROM.")
@@ -66,13 +70,17 @@ func (s *Sys) LoadGame(rom []byte) {
 	log.Println("rom loaded")
 }
 
-func (s *Sys) Run() error {
+func (s *Sys) runCycles(c int) error {
 	tick := time.Tick(time.Second / cpuFrequency) // 60hz.
-	for {
+	for i := 0; c >= 0 && i < c; i++ {
 		<-tick
 		s.stepCycle()
 	}
 	return nil
+}
+
+func (s *Sys) Run() error {
+	return s.runCycles(-1)
 }
 
 func (s *Sys) stepCycle() {

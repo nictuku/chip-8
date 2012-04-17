@@ -28,6 +28,10 @@ func (v *video) init() error {
 	return nil
 }
 
+func (v *video) quit() {
+	sdl.Quit()
+}
+
 func (v *video) draw(pixels []byte) {
 	surface := sdl.GetVideoSurface()
 
@@ -45,4 +49,15 @@ func (v *video) draw(pixels []byte) {
 		}
 	}
 	surface.Flip()
+}
+
+func (v *video) SaveBMP(filename string) error {
+	surface := sdl.GetVideoSurface()
+	if surface == nil {
+		return errors.New("video.SaveBMP: surface is nil")
+	}
+	if ret := surface.SaveBMP(filename); ret != 0 {
+		return errors.New("video.SaveBMP: returned a non-zero value")
+	}
+	return nil
 }

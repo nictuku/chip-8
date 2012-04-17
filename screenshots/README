@@ -1,0 +1,11 @@
+To populate this directory, run the tests inside "system":
+
+$ cd system
+$ go test |grep directory
+(...)
+Screenshots directory: /tmp/<gameA>090859780
+(...)
+Screenshots directory: /tmp/<gameB>312323213
+
+Those directories will then contain bmp and png files for each game. Make sure
+each one look correct for a 100-cycles run, then copy the files here.
