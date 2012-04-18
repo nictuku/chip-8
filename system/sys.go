@@ -73,7 +73,9 @@ func (s *Sys) runCycles(c int) error {
 	tick := time.Tick(time.Second / cpuFrequency) // 60hz.
 	for i := 0; c < 0 || i < c; i++ {
 		<-tick
-		s.stepCycle()
+		if err := s.stepCycle(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -82,42 +84,42 @@ func (s *Sys) Run() error {
 	return s.runCycles(-1)
 }
 
-func (s *Sys) stepCycle() {
+func (s *Sys) stepCycle() error {
 
 	draw := false
 	// pc points to next opcode.
 	opcode := uint16(s.mem[s.PC])<<8 | uint16(s.mem[s.PC+1])
 	log.Printf("opcode 0x%04x", opcode)
 
-	masked := opcode & 0xF000
-	switch masked {
+	switch opcode & 0xF000 {
 	case 0x0000:
-		// 0NNN	Calls RCA 1802 program at address NNN.
-		//  => Only used by the original computers that implemented CHIP-8.
+		if opcode&0xFF00 != 0x0000 {
+			// 0NNN	Calls RCA 1802 program at address NNN.
+			//  => Only used by the original computers that implemented CHIP-8.
+			goto NOTIMPLEMENTED
+		}
 
-		switch masked & 0x000F {
+		switch opcode & 0x000F {
 		case 0x0000:
 			// 00E0	Clears the screen.
 			s.gfx = make([]byte, screenWidth*screenHeight)
 			draw = true
-			s.PC += 2
 		default:
 			// 00EE	Returns from a subroutine.
-			log.Printf("opcode not implemented: %x", opcode)
-			return
+			goto NOTIMPLEMENTED
 		}
 
 	case 0x1000:
 		// 1NNN	Jumps to address NNN.
 		s.PC = opcode & 0x0FFF
+		goto SKIPINC
 
 	// 2NNN	Calls subroutine at NNN.
 	// 3XNN	Skips the next instruction if VX equals NN.
 
 	case 0x4000:
 		if s.V[(opcode&0x0F00)>>8] != byte(opcode&0x00FF) {
-			s.PC += 4
-		} else {
+			// Skip next.
 			s.PC += 2
 		}
 
@@ -128,18 +130,32 @@ func (s *Sys) stepCycle() {
 		// 6XNN	Sets VX to NN.
 		vx := (opcode & 0x0F00) >> 8
 		s.V[vx] = byte(opcode & 0x00FF)
-		s.PC += 2
 	case 0x7000:
 		// 7XNN	Adds NN to VX.
 		vx := (opcode & 0x0F00) >> 8
 		s.V[vx] += byte(opcode & 0x00FF)
-		s.PC += 2
 
 	// 8XY0	Sets VX to the value of VY.
 	// 8XY1	Sets VX to VX or VY.
 	// 8XY2	Sets VX to VX and VY.
-	// 8XY3	Sets VX to VX xor VY.
-	// 8XY4	Adds VY to VX. VF is set to 1 when there's a carry, and to 0 when there isn't.
+
+	case 0x8000:
+		switch opcode & 0x000F {
+		case 0x0003:
+			// 8XY3	Sets VX to VX xor VY.
+			vx := (opcode & 0x0F00) >> 8
+			vy := (opcode & 0x00F0) >> 4
+			s.V[vx] = byte(vx ^ vy)
+		case 0x0004:
+			// 8XY4	Adds VY to VX. VF is set to 1 when there's a carry, and to 0 when there isn't.
+			vx := (opcode & 0x0F00) >> 8
+			vy := (opcode & 0x00F0) >> 4
+			var add uint16 = uint16(s.V[vx]) + uint16(s.V[vy])
+			s.V[vx] = byte(add & 0xFF)
+			s.V[0xF] = byte(add>>8) & 0x1
+		default:
+			goto NOTIMPLEMENTED
+		}
 	// 8XY5	VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there isn't.
 	// 8XY6	Shifts VX right by one. VF is set to the value of the least significant bit of VX before the shift.[2]
 	// 8XY7	Sets VX to VY minus VX. VF is set to 0 when there's a borrow, and 1 when there isn't.
@@ -148,9 +164,7 @@ func (s *Sys) stepCycle() {
 
 	case 0xA000:
 		// ANNN	Sets I to the address NNN.
-		log.Println("ANNN")
 		s.I = opcode & 0x0FFF
-		s.PC += 2
 
 	// BNNN	Jumps to the address NNN plus V0.
 	// CXNN	Sets VX to a random number and NN.
@@ -169,11 +183,9 @@ func (s *Sys) stepCycle() {
 		y := uint16(s.V[(opcode&0x00F0)>>4])
 		height := uint16(opcode & 0xF)
 		s.V[0xF] = 0
-		log.Println("height", height)
 
 		for yline := uint16(0); yline < height; yline++ {
 			pixel = s.mem[s.I+yline]
-			log.Printf("pixel: %x", pixel)
 			for xline := uint16(0); xline < 8; xline++ {
 				if (pixel & (0x80 >> xline)) != 0 {
 					offset := (x + xline + ((y + yline) * 64))
@@ -184,12 +196,10 @@ func (s *Sys) stepCycle() {
 						s.V[0xF] = 1
 					}
 					s.gfx[offset] ^= 1
-					log.Printf("setting something in offset %x", offset)
 				}
 			}
 		}
 		draw = true
-		s.PC += 2
 
 		// EX9E Skips the next instruction if the key stored in VX is pressed.
 		// EXA1	Skips the next instruction if the key stored in VX isn't pressed.
@@ -200,10 +210,8 @@ func (s *Sys) stepCycle() {
 		case 0x0015:
 			// FX15	Sets the delay timer to VX.
 			s.DelayTimer = byte(opcode & 0x00FF)
-			s.PC += 2
 		default:
-			log.Printf("opcode not implemented: %x", opcode)
-			return
+			goto NOTIMPLEMENTED
 		}
 
 		// FX18	Sets the sound timer to VX.
@@ -214,9 +222,11 @@ func (s *Sys) stepCycle() {
 		// FX65	Fills V0 to VX with values from memory starting at address I.[4
 
 	default:
-		log.Printf("opcode not implemented: %x", opcode)
-		return
+		goto NOTIMPLEMENTED
 	}
+	// Common case.
+	s.PC += 2
+SKIPINC:
 	if s.DelayTimer > 0 {
 		s.DelayTimer -= 1
 	}
@@ -232,4 +242,7 @@ func (s *Sys) stepCycle() {
 	}
 	// TODO(nictuku): Show CPU tracer on video.
 	fmt.Println(s.String())
+	return nil
+NOTIMPLEMENTED:
+	return fmt.Errorf("opcode not implemented: %x", opcode)
 }

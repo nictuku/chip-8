@@ -15,12 +15,12 @@ import (
 	"code.google.com/p/go.image/bmp"
 )
 
-const numCyclesPerGame = 100
+const numCyclesPerGame = 120 // 2 seconds per test.
 
 var games []string = []string{
 	"ibm",
+	"zero",
 	// Not supported yet.
-	// "zero",
 	// "PONG",
 }
 
@@ -38,7 +38,9 @@ func TestGames(t *testing.T) {
 			t.Fatal(err)
 		}
 		sys.LoadGame(rom)
-		sys.runCycles(numCyclesPerGame)
+		if err := sys.runCycles(numCyclesPerGame); err != nil {
+			t.Fatal(err)
+		}
 
 		gh, err := newScreenshotHash(sys, game)
 		if err != nil {

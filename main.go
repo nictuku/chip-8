@@ -26,6 +26,8 @@ func main() {
 		return
 	}
 	sys.LoadGame(rom)
-	sys.Run()
+	if err := sys.Run(); err != nil {
+		log.Fatal(err)
+	}
 	log.Println("done")
 }
