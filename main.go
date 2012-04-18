@@ -14,6 +14,7 @@ func main() {
 	if romPath == "" {
 		log.Fatal("Missing ROM filename argument.")
 	}
+	log.Printf("Loading ROM from %v", romPath)
 	rom, err := ioutil.ReadFile(romPath)
 	if err != nil {
 		log.Fatal(err)

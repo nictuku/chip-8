@@ -67,12 +67,11 @@ func (s *Sys) LoadGame(rom []byte) {
 	}
 	romArea := s.mem[programAreaStart:]
 	copy(romArea, rom)
-	log.Println("rom loaded")
 }
 
 func (s *Sys) runCycles(c int) error {
 	tick := time.Tick(time.Second / cpuFrequency) // 60hz.
-	for i := 0; c >= 0 && i < c; i++ {
+	for i := 0; c < 0 || i < c; i++ {
 		<-tick
 		s.stepCycle()
 	}
