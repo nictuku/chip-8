@@ -42,9 +42,9 @@ func (v *video) draw(pixels []byte) {
 		for xline := int16(0); xline < screenWidth; xline++ {
 			r := &sdl.Rect{xline * pixelSize, yline * pixelSize, pixelSize, pixelSize}
 			if pixels[xline+yline*64] == 0 {
-				surface.FillRect(r, sdl.MapRGBA(surface.Format, 255, 255, 255, 128))
-			} else {
 				surface.FillRect(r, sdl.MapRGBA(surface.Format, 0, 0, 0, 128))
+			} else {
+				surface.FillRect(r, sdl.MapRGBA(surface.Format, 255, 255, 255, 128))
 			}
 		}
 	}
