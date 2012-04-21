@@ -1,5 +1,9 @@
 package system
 
+import (
+	"fmt"
+)
+
 const (
 	cpuFrequency     = 60 // 60ghz
 	numRegisters     = 16
@@ -14,7 +18,31 @@ const (
 // 0x050 - 0x0A0 	- font set
 type memory []byte
 
-type stack []byte // 16 levels.
+type stack struct {
+	i []byte // 16 levels.
+	c int
+}
+
+func newStack() stack {
+	return stack{make([]byte, 16), 0}
+}
+
+func (s stack) push(x byte) error {
+	if s.c >= 15 {
+		return fmt.Errorf("stack over limit")
+	}
+	s.c++
+	s.i[s.c] = x
+	return nil
+}
+
+func (s stack) pop() (byte, error) {
+	if s.c == 0 {
+		return 0, fmt.Errorf("stack empty")
+	}
+	s.c--
+	return s.i[s.c], nil
+}
 
 type key uint16 // 16 keys, one per bit.
 

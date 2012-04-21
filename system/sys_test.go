@@ -20,8 +20,12 @@ const numCyclesPerGame = 120 // 2 seconds per test.
 var games []string = []string{
 	"ibm",
 	"zero",
+	"GUESS",
+	"PONG",   // Needs keyboard, of course.
+	"SYZYGY", // keyboard.
+	"UFO",    // keyboard
+	// "BLINKY", // requires SCHIP instructions.
 	// Not supported yet.
-	// "PONG",
 }
 
 func TestGames(t *testing.T) {
