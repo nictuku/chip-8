@@ -20,12 +20,20 @@ const numCyclesPerGame = 120 // 2 seconds per test.
 var games []string = []string{
 	"ibm",
 	"zero",
+
+	// TODO(nictuku): These games should be tested with keyboard events too.
 	"GUESS",
-	"PONG",   // Needs keyboard, of course.
-	"SYZYGY", // keyboard.
-	"UFO",    // keyboard
-	// "BLINKY", // requires SCHIP instructions.
-	// Not supported yet.
+	"SYZYGY",
+
+	// Inconsistent spaceship blinking?
+	// "UFO",
+
+	// Although pong works for 120 cycles, it crashes later, when the balls
+	// leaves the screen: Missing instruction 80d5.
+	// "PONG",
+
+	// Missing SCHIP instructions.
+	// "BLINKY",
 }
 
 func Test8XY0(t *testing.T) {
