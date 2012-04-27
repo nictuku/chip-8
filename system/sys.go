@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"strconv"
 	"time"
 )
 
@@ -24,7 +23,7 @@ func New() *Sys {
 	mem := make(memory, ramCapacity)
 
 	// XXX Should this be after 0x50? Find a program that uses it, then try.
-	//fontOffset := mem[0x50:]
+	// fontOffset := mem[0x50:]
 	// copy(fontOffset, fontset)
 	copy(mem, fontset)
 
@@ -274,8 +273,17 @@ func (s *Sys) stepCycle() error {
 			s.SoundTimer = s.V[x]
 
 		case 0x001E:
-			// FX1E	Adds VX to I.[3]
-			s.mem[s.I] = s.mem[s.I] + s.V[x]
+			// FX1E	Adds VX to I.
+			// VF is set to 1 when range overflow (I+VX>0xFFF), and 0 when
+			// there isn't. This is undocumented feature of the Chip-8 and used
+			// by Spacefight 2019! game.
+			add := s.I + uint16(s.V[x])
+			if add > s.I {
+				s.V[0xF] = 0x0
+			} else {
+				s.V[0xF] = 0x1
+			}
+			s.I = add
 
 		case 0x0029:
 			// FX29	Sets I to the location of the sprite for the character in VX. Characters 0-F (in hexadecimal) are represented by a 4x5 font.
@@ -286,21 +294,18 @@ func (s *Sys) stepCycle() error {
 			// the most significant of three digits at the address in I, the
 			// middle digit at I plus 1, and the least significant digit at I
 			// plus 2.
-			ascii := fmt.Sprintf("%v", strconv.FormatUint(uint64(s.V[x]), 10))
-			for i := 0; i < len(ascii); i++ {
-				a, err := strconv.ParseUint(string(ascii[i]), 10, 8)
-				if err != nil {
-					return err
-				}
-				s.mem[s.I+uint16(i)] = byte(a)
-			}
+			s.mem[s.I] = byte(s.V[x] / 100 % 10)
+			s.mem[s.I+1] = byte(s.V[x] / 10 % 10)
+			s.mem[s.I+2] = byte(s.V[x] % 10)
 
 		case 0x0055:
 			// FX55	Stores V0 to VX in memory starting at address I.
+			// On the original interpreter, when the operation is done, I=I+X+1 
 			for i, reg := range s.V[0:x] {
 				m := s.I + uint16(i)
 				s.mem[m] = reg
 			}
+			s.I = +uint16(x + 1)
 
 		case 0x0065:
 			// FX65	Fills V0 to VX with values from memory starting at address I.

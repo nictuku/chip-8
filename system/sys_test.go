@@ -28,6 +28,74 @@ var games []string = []string{
 	// Not supported yet.
 }
 
+func Test8XY0(t *testing.T) {
+	s := New()
+	s.V[0xd] = 1
+	s.mem[s.PC] = 0x88
+	s.mem[s.PC+1] = 0xd0
+	if err := s.stepCycle(); err != nil {
+		t.Fatal(err)
+		return
+	}
+	if s.V[0x8] != byte(1) {
+		t.Errorf("s.V[0x8], got %x, wanted %x", s.V[0x8], 1)
+	}
+}
+
+func TestFX1E(t *testing.T) {
+	s := New()
+	s.V[3] = 2 // Add 2.
+
+	// Overflow test.
+	s.I = 65535
+	s.mem[s.PC] = 0xF3
+	s.mem[s.PC+1] = 0x1E
+	if err := s.stepCycle(); err != nil {
+		t.Fatal(err)
+		return
+	}
+	if s.I != uint16(1) {
+		t.Errorf("s.I, got %x, wanted %x", s.I, 1)
+	}
+	if s.V[0xf] != 0x1 {
+		t.Errorf("s.V[0xf], got %x, wanted %x", s.V[0xf], 0x1)
+	}
+	// Again, but no overflow.
+	s.mem[s.PC] = 0xF3
+	s.mem[s.PC+1] = 0x1E
+	if err := s.stepCycle(); err != nil {
+		t.Fatal(err)
+		return
+	}
+	if s.I != uint16(3) {
+		t.Errorf("s.I, got %x, wanted %x", s.I, 3)
+	}
+	if s.V[0xf] != 0 {
+		t.Errorf("s.V[0xf], got %x, wanted %x", s.V[0xf], 0)
+	}
+}
+
+func TestFX33(t *testing.T) {
+	s := New()
+	s.V[3] = 34
+	s.I = 1337
+	s.mem[s.PC] = 0xF3
+	s.mem[s.PC+1] = 0x33
+	if err := s.stepCycle(); err != nil {
+		t.Fatal(err)
+		return
+	}
+	if s.mem[s.I] != byte(0) {
+		t.Errorf("s.I, got %x, wanted %x", s.mem[s.I], 0)
+	}
+	if s.mem[s.I+1] != byte(3) {
+		t.Errorf("s.I, got %x, wanted %x", s.mem[s.I+1], 3)
+	}
+	if s.mem[s.I+2] != byte(4) {
+		t.Errorf("s.I, got %x, wanted %x", s.mem[s.I+2], 4)
+	}
+}
+
 func TestGames(t *testing.T) {
 	for _, game := range games {
 		sys := New()
