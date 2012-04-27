@@ -35,7 +35,19 @@ func CpuTracer(s interface{}) string {
 		case reflect.Uint16:
 			fmt.Fprintf(buf, "%v: %04x\n", name, v.Field(i).Interface())
 		case reflect.Slice:
-			fmt.Fprintf(buf, "%v: % 02x\n", name, v.Field(i).Interface())
+			s := v.Field(i).Interface()
+			if bs, ok := s.([]byte); ok {
+				fmt.Fprintf(buf, "%v: ", name)
+				for i, v := range bs {
+					fmt.Fprintf(buf, "%v[%0x]=%02x", name, i, v)
+					if i < len(bs)-1 {
+						fmt.Fprintf(buf, ", ")
+					}
+				}
+			} else {
+				fmt.Fprintf(buf, "%v: % 02x", name, v.Field(i).Interface())
+			}
+			fmt.Fprintln(buf)
 		default:
 			fmt.Fprintf(buf, "%v: %v\n", name, v.Field(i).Interface())
 		}

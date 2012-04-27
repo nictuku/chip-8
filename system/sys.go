@@ -98,7 +98,7 @@ func (s *Sys) stepCycle() error {
 	// pc points to next opcode.
 	opcode := uint16(s.mem[s.PC])<<8 | uint16(s.mem[s.PC+1])
 	defer log.Printf("opcode 0x%04x", opcode)
-	defer fmt.Println(s.String())
+	defer log.Printf("cycle result:\n%v", s.String())
 
 	x := byte((opcode & 0x0F00) >> 8)
 	y := byte((opcode & 0x00F0) >> 4)
