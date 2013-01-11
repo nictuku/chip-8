@@ -65,8 +65,14 @@ func (s *Sys) Init() error {
 	return s.video.init()
 }
 
+// Quit should be called before the program exits.
 func (s *Sys) Quit() {
 	s.video.quit()
+}
+
+// Closes the game window.
+func (s *Sys) Close() {
+	s.video.close()
 }
 
 func (s *Sys) LoadGame(rom []byte) {
