@@ -10,6 +10,7 @@ package system
 
 import (
 	"fmt"
+	"github.com/go-gl/glfw"
 	"log"
 	"math/rand"
 	"time"
@@ -27,7 +28,7 @@ func New() *Sys {
 	// copy(fontOffset, fontset)
 	copy(mem, fontset)
 
-	return &Sys{
+	s := &Sys{
 		V:     make([]byte, numRegisters),
 		PC:    programAreaStart,
 		I:     programAreaStart,
@@ -36,7 +37,32 @@ func New() *Sys {
 		gfx:   make([]byte, screenWidth*screenHeight),
 		video: new(video),
 		stack: make([]uint16, 16),
+		key:   make([]bool, 16),
 	}
+
+	return s
+}
+
+var keyMap = map[int]byte{
+	'1':           0x1,
+	'2':           0x2,
+	'3':           0x3,
+	'4':           0xc,
+	'Q':           0x4,
+	'W':           0x5,
+	'E':           0x6,
+	'R':           0xd,
+	'A':           0x7,
+	'S':           0x8,
+	'D':           0x9,
+	'F':           0xe,
+	'Z':           0xa,
+	'X':           0x0,
+	'C':           0xb,
+	'V':           0xf,
+	glfw.KeyUp:    0x2,
+	glfw.KeyLeft:  0x4,
+	glfw.KeyRight: 0x6,
 }
 
 type Sys struct {
@@ -55,10 +81,12 @@ type Sys struct {
 	mem   []byte
 	video *video
 	stack []uint16
+	key   []bool
 }
 
 func (s *Sys) String() string {
-	return CpuTracer(s)
+	return ""
+	//return CpuTracer(s)
 }
 
 func (s *Sys) Init() error {
@@ -84,6 +112,23 @@ func (s *Sys) LoadGame(rom []byte) {
 }
 
 func (s *Sys) runCycles(c int) error {
+
+	glfw.SetKeyCallback(func(key, state int) {
+		// TODO: Buffer these events and then consume them when running a cycle, 
+		// instead of keeping the state of the key. Otherwise a key may be pressed
+		// and then released while the emulator is sleeping between cycles.
+		fmt.Printf("key %x (%v) = %d\n", key, string(key), state)
+		if k, ok := keyMap[key]; ok {
+			if state == glfw.KeyPress {
+				s.key[k] = true
+			} else {
+				s.key[k] = false
+			}
+		} else {
+			fmt.Println("not mapped")
+		}
+	})
+
 	tick := time.Tick(time.Second / cpuFrequency) // 60hz.
 	for i := 0; c < 0 || i < c; i++ {
 		<-tick
@@ -99,12 +144,13 @@ func (s *Sys) Run() error {
 }
 
 func (s *Sys) stepCycle() error {
+
 	// TODO(nictuku): Show CPU tracer on video.
 	draw := false
 	// pc points to next opcode.
 	opcode := uint16(s.mem[s.PC])<<8 | uint16(s.mem[s.PC+1])
-	defer log.Printf("opcode 0x%04x", opcode)
-	defer log.Printf("cycle result:\n%v", s.String())
+	// defer log.Printf("opcode 0x%04x", opcode)
+	// defer log.Printf("cycle result:\n%v", s.String())
 
 	x := byte((opcode & 0x0F00) >> 8)
 	y := byte((opcode & 0x00F0) >> 4)
@@ -227,15 +273,15 @@ func (s *Sys) stepCycle() error {
 		var pixel byte
 		x := uint16(s.V[(opcode&0x0F00)>>8])
 		y := uint16(s.V[(opcode&0x00F0)>>4])
-		height := uint16(opcode & 0xF)
+		height := uint16(opcode & 0x000F)
 		s.V[0xF] = 0
 
-		for yline := uint16(0); yline < height; yline++ {
+		// yline+y < screenHeight was added later, to prevent out of range offsets.
+		for yline := uint16(0); yline < height && yline+y < screenHeight; yline++ {
 			pixel = s.mem[s.I+yline]
 			for xline := uint16(0); xline < 8; xline++ {
 				if (pixel & (0x80 >> xline)) != 0 {
-					offset := (x + xline + ((y + yline) * 64))
-					log.Println("offset:", offset)
+					offset := (x + xline + ((y + yline) * screenWidth))
 					if s.gfx[offset] == 1 {
 						// VF is set to 1 if any screen pixels are flipped from
 						// set to unset when the sprite is drawn, and to 0 if
@@ -253,20 +299,44 @@ func (s *Sys) stepCycle() error {
 		case 0x00A1:
 			// EXA1	Skips the next instruction if the key stored in VX isn't pressed.
 			// TODO(nictuku): Implement keyboard events.
-			s.PC += 2
+			if (s.key[s.V[x]]) == false {
+				s.PC += 2
+			}
 			// goto NOTIMPLEMENTED
 		case 0x009E:
 			// EX9E Skips the next instruction if the key stored in VX is pressed.
 			// TODO(nictuku): Implement keyboard events.
 			// goto NOTIMPLEMENTED
 			// s.PC += 2
+			if (s.key[s.V[x]]) == true {
+				s.PC += 2
+			}
 
 		default:
 			goto NOTIMPLEMENTED
 		}
-		// FX0A	A key press is awaited, and then stored in VX.
 	case 0xF000:
 		switch opcode & 0x00FF {
+		case 0x000A:
+			// FX0A	A key press is awaited, and then stored in VX.
+			// notifyKeyEvent.
+		L:
+			for {
+
+				glfw.WaitEvents()
+				for i, k := range keyMap {
+					panic(fmt.Sprintf("resulting value %x", k))
+
+					if glfw.Key(int(k)) == glfw.KeyPress {
+
+						s.key[i] = true
+						s.V[x] = k
+						break L
+					}
+					s.key[i] = false
+				}
+			}
+
 		case 0x0007:
 			// FX07	Sets VX to the value of the delay timer.
 			s.V[x] = s.DelayTimer
