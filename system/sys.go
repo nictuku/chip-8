@@ -235,10 +235,19 @@ func (s *Sys) stepCycle() error {
 			add := s.V[x] + s.V[y]
 			s.V[x] = add & 0xFF
 			s.V[0xF] = (add >> 8) & 0x1
+		case 0x0005:
+			// 8XY5	VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there isn't.
+			sub := s.V[x] - s.V[y]
+			if sub < 0 {
+				sub = 0
+				s.V[0xF] = 0
+			} else {
+				s.V[0xF] = 1
+			}
+			s.V[x] = sub
 		default:
 			goto NOTIMPLEMENTED
 		}
-	// 8XY5	VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there isn't.
 	// 8XY6	Shifts VX right by one. VF is set to the value of the least significant bit of VX before the shift.[2]
 	// 8XY7	Sets VX to VY minus VX. VF is set to 0 when there's a borrow, and 1 when there isn't.
 	// 8XYE	Shifts VX left by one. VF is set to the value of the most significant bit of VX before the shift.[2]
