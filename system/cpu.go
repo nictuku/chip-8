@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	cpuFrequency     = 60 // 60ghz
+	cpuFrequency     = 180 // Original was 60hz.
 	numRegisters     = 16
 	ramCapacity      = 4096
 	programAreaStart = 0x200

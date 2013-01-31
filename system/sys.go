@@ -114,22 +114,19 @@ func (s *Sys) LoadGame(rom []byte) {
 func (s *Sys) runCycles(c int) error {
 
 	glfw.SetKeyCallback(func(key, state int) {
-		// TODO: Buffer these events and then consume them when running a cycle, 
-		// instead of keeping the state of the key. Otherwise a key may be pressed
-		// and then released while the emulator is sleeping between cycles.
-		fmt.Printf("key %x (%v) = %d\n", key, string(key), state)
+		// I think there is a chance of key presses being lost when the system
+		// is sleeping between cycles.
+		// fmt.Printf("key %x (%v) = %d\n", key, string(key), state)
 		if k, ok := keyMap[key]; ok {
 			if state == glfw.KeyPress {
 				s.key[k] = true
 			} else {
 				s.key[k] = false
 			}
-		} else {
-			fmt.Println("not mapped")
 		}
 	})
 
-	tick := time.Tick(time.Second / cpuFrequency) // 60hz.
+	tick := time.Tick(time.Second / cpuFrequency)
 	for i := 0; c < 0 || i < c; i++ {
 		<-tick
 		if err := s.stepCycle(); err != nil {
